@@ -1,3 +1,2 @@
-// A script that lists all documents with name="Holberton school" in the collection school
-
-db.school.find({name: "Holberton school"})
+// Display the number of documents in the school collection
+printjson(db.school.countDocuments({}))
