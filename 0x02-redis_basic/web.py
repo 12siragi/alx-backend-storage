@@ -2,6 +2,7 @@
 """
 Module web.py
 Provides a function to fetch and cache the HTML content of a URL.
+Includes a decorator to track URL accesses and cache the content with an expiration time.
 """
 
 import redis
@@ -25,6 +26,15 @@ def cache_page(expiration: int = 10) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(url: str) -> str:
+            """
+            Wrapper function to cache content and count access.
+
+            Args:
+                url (str): The URL to fetch and cache.
+
+            Returns:
+                str: The HTML content of the URL.
+            """
             # Track the number of times the URL is accessed
             cache_count_key = f"count:{url}"
             redis_client.incr(cache_count_key)
