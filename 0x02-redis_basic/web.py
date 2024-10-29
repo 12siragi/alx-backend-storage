@@ -10,6 +10,7 @@ from typing import Callable
 # Initialize Redis client
 cache = redis.Redis()
 
+
 def get_page(url: str) -> str:
     """
     Retrieves a URL and caches it in Redis with a 10-second expiration.
@@ -25,16 +26,16 @@ def get_page(url: str) -> str:
     if cached_page:
         cache.incr("page_access_count")
         return cached_page.decode('utf-8')
-    
+
     response = requests.get(url)
     page_content = response.text
-    
+
     # Cache the content with a 10-second expiration
     cache.setex(url, 10, page_content)
-    
+
     # Increment the page access count
     cache.incr("page_access_count")
-    
+
     return page_content
 
 
@@ -66,7 +67,7 @@ def log_stats():
     print(f"\tmethod DELETE: {delete}")
     print(f"{path} status check")
     print("IPs:")
-    
+
     # Aggregate top IPs
     sorted_ips = logs_collection.aggregate(
         [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
@@ -80,18 +81,18 @@ def log_stats():
 if __name__ == "__main__":
     # Test caching functionality
     url = "http://google.com"
-    
+
     # Fetch and cache page
     print("Fetching page content...")
     page_content = get_page(url)
     print("Page content cached:", bool(cache.get(url)))
-    
+
     # Wait 10 seconds to test expiration
     from time import sleep
     print("Waiting 10 seconds for cache to expire...")
     sleep(10)
     print("Page content after expiration:", cache.get(url))
-    
+
     # Log stats from MongoDB
     print("\nLog statistics:")
     log_stats()
