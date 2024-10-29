@@ -1,36 +1,91 @@
 #!/usr/bin/env python3
 """
-Caching request module
+Script to cache web pages and log access stats.
 """
+
 import redis
 import requests
-from functools import wraps
+from pymongo import MongoClient
 from typing import Callable
+from time import sleep
+
+# Initialize Redis and MongoDB clients
+cache = redis.Redis()
+client = MongoClient('mongodb://127.0.0.1:27017')
+logs_collection = client.logs.nginx
 
 
-def track_get_page(fn: Callable) -> Callable:
-    """ Decorator for get_page
-    """
-    @wraps(fn)
-    def wrapper(url: str) -> str:
-        """ Wrapper that:
-            - check whether a url's data is cached
-            - tracks how many times get_page is called
-        """
-        client = redis.Redis()
-        client.incr(f'count:{url}')
-        cached_page = client.get(f'{url}')
-        if cached_page:
-            return cached_page.decode('utf-8')
-        response = fn(url)
-        client.set(f'{url}', response, 10)
-        return response
-    return wrapper
-
-
-@track_get_page
 def get_page(url: str) -> str:
-    """ Makes a http request to a given endpoint
     """
+    Retrieves a URL and caches it in Redis with a 10-second expiration.
+
+    Parameters:
+    - url (str): The URL to retrieve and cache.
+
+    Returns:
+    - str: The content of the URL.
+    """
+    cached_page = cache.get(url)
+    if cached_page:
+        return cached_page.decode('utf-8')
+    
     response = requests.get(url)
-    return response.text
+    page_content = response.text
+    
+    # Cache the content with a 10-second expiration
+    cache.setex(url, 10, page_content)
+    
+    # Increment the page access count
+    cache.incr("page_access_count")
+    
+    return page_content
+
+
+def log_stats():
+    """Logs stats from the nginx logs collection in MongoDB."""
+    total = logs_collection.count_documents({})
+    get = logs_collection.count_documents({"method": "GET"})
+    post = logs_collection.count_documents({"method": "POST"})
+    put = logs_collection.count_documents({"method": "PUT"})
+    patch = logs_collection.count_documents({"method": "PATCH"})
+    delete = logs_collection.count_documents({"method": "DELETE"})
+    path = logs_collection.count_documents({"method": "GET", "path": "/status"})
+
+    print(f"{total} logs")
+    print("Methods:")
+    print(f"\tmethod GET: {get}")
+    print(f"\tmethod POST: {post}")
+    print(f"\tmethod PUT: {put}")
+    print(f"\tmethod PATCH: {patch}")
+    print(f"\tmethod DELETE: {delete}")
+    print(f"{path} status check")
+    print("IPs:")
+    
+    # Aggregate top IPs
+    sorted_ips = logs_collection.aggregate(
+        [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
+         {"$sort": {"count": -1}}])
+    for i, ip in enumerate(sorted_ips):
+        if i == 10:
+            break
+        print(f"\t{ip.get('_id')}: {ip.get('count')}")
+
+
+if __name__ == "__main__":
+    # Test caching functionality
+    url = "http://google.com"
+    
+    # Fetch and cache page
+    print("Fetching page content...")
+    page_content = get_page(url)
+    print("Page content cached:", bool(cache.get(url)))
+    
+    # Wait 10 seconds to test expiration
+    print("Waiting 10 seconds for cache to expire...")
+    sleep(10)
+    print("Page content after expiration:", cache.get(url))
+    
+    # Log stats from MongoDB
+    print("\nLog statistics:")
+    log_stats()
+
