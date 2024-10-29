@@ -14,7 +14,8 @@ def cache_page(expiration_time: int):
     """Decorator to cache the output of the get_page function."""
     def decorator(func):
         @wraps(func)
-        def wrapper(url: str):
+        def wrapper(url: str) -> str:
+            """Fetch and cache a web page."""
             # Check if the URL is cached
             cached_data = cache.get(url)
             if cached_data:
@@ -29,6 +30,9 @@ def cache_page(expiration_time: int):
 
             # Increment the access count
             count_key = f"count:{url}"
+            # Initialize the count to 0 if it doesn't exist
+            if not cache.exists(count_key):
+                cache.set(count_key, 0)
             cache.incr(count_key)
 
             return html_content
