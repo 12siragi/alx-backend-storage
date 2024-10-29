@@ -16,7 +16,7 @@ def cache_page(url: str):
     """
     def decorator(func):
         def wrapper(*args, **kwargs):
-            # Cache key for the URL
+            # Cache key for the URL and access count
             cache_key = f"count:{url}"
             cached_content = cache.get(url)
 
@@ -37,11 +37,11 @@ def cache_page(url: str):
         return wrapper
     return decorator
 
-@cache_page(url='http://slowwly.robertomurray.co.uk')
+@cache_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
 def get_page(url: str) -> str:
     """
     Fetch the HTML content of a given URL.
-    
+
     Parameters:
     - url (str): The URL to fetch.
 
