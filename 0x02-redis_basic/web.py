@@ -10,10 +10,10 @@ from typing import Callable
 # Initialize Redis client
 cache = redis.Redis()
 
-
 def get_page(url: str) -> str:
     """
     Retrieves a URL and caches it in Redis with a 10-second expiration.
+    Increments access count for each call.
 
     Parameters:
     - url (str): The URL to retrieve and cache.
@@ -95,4 +95,3 @@ if __name__ == "__main__":
     # Log stats from MongoDB
     print("\nLog statistics:")
     log_stats()
-
