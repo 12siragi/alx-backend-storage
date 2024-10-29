@@ -1,94 +1,64 @@
 #!/usr/bin/env python3
 """
-Script to cache web pages and log access stats.
+A module to retrieve web pages and cache the results in Redis.
 """
 
-import redis
 import requests
-from typing import Callable
-from pymongo import MongoClient  # Move import here for clarity
+import redis
+import time
 
-# Initialize Redis client
+# Initialize the Redis client
 cache = redis.Redis()
 
+def cache_page(url: str):
+    """
+    Decorator to cache the page content and access count in Redis.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # Cache key for the URL
+            cache_key = f"count:{url}"
+            cached_content = cache.get(url)
 
+            # If the page is cached, increment the access count and return cached content
+            if cached_content:
+                cache.incr(cache_key)
+                return cached_content.decode('utf-8')
+
+            # Call the actual function if not cached
+            page_content = func(*args, **kwargs)
+            # Cache the content with a 10-second expiration
+            cache.setex(url, 10, page_content)
+
+            # Increment the access count
+            cache.incr(cache_key)
+
+            return page_content
+        return wrapper
+    return decorator
+
+@cache_page(url='http://slowwly.robertomurray.co.uk')
 def get_page(url: str) -> str:
     """
-    Retrieves a URL and caches it in Redis with a 10-second expiration.
-    Increments access count for each call.
-
+    Fetch the HTML content of a given URL.
+    
     Parameters:
-    - url (str): The URL to retrieve and cache.
+    - url (str): The URL to fetch.
 
     Returns:
-    - str: The content of the URL.
+    - str: The HTML content of the page.
     """
-    cached_page = cache.get(url)
-    if cached_page:
-        cache.incr("page_access_count")
-        return cached_page.decode('utf-8')
-
     response = requests.get(url)
-    page_content = response.text
-
-    # Cache the content with a 10-second expiration
-    cache.setex(url, 10, page_content)
-
-    # Increment the page access count
-    cache.incr("page_access_count")
-
-    return page_content
-
-
-def log_stats():
-    """Logs stats from the nginx logs collection in MongoDB."""
-    client = MongoClient('mongodb://127.0.0.1:27017')
-    logs_collection = client.logs.nginx
-
-    total = logs_collection.count_documents({})
-    get = logs_collection.count_documents({"method": "GET"})
-    post = logs_collection.count_documents({"method": "POST"})
-    put = logs_collection.count_documents({"method": "PUT"})
-    patch = logs_collection.count_documents({"method": "PATCH"})
-    delete = logs_collection.count_documents({"method": "DELETE"})
-    path = logs_collection.count_documents({"method": "GET", "path": "/status"})
-
-    print(f"{total} logs")
-    print("Methods:")
-    print(f"\tmethod GET: {get}")
-    print(f"\tmethod POST: {post}")
-    print(f"\tmethod PUT: {put}")
-    print(f"\tmethod PATCH: {patch}")
-    print(f"\tmethod DELETE: {delete}")
-    print(f"{path} status check")
-    print("IPs:")
-
-    # Aggregate top IPs
-    sorted_ips = logs_collection.aggregate(
-        [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
-         {"$sort": {"count": -1}}])
-    
-    for i, ip in enumerate(sorted_ips):
-        if i == 10:
-            break
-        print(f"\t{ip.get('_id')}: {ip.get('count')}")
-
+    return response.text
 
 if __name__ == "__main__":
-    # Test caching functionality
-    url = "http://google.com"
-
-    # Fetch and cache page
+    # Testing the function
     print("Fetching page content...")
-    page_content = get_page(url)
-    print("Page content cached:", bool(cache.get(url)))
+    content = get_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
+    print(content[:100])  # Print the first 100 characters of the content
 
-    # Wait 10 seconds to test expiration
-    from time import sleep
-    print("Waiting 10 seconds for cache to expire...")
-    sleep(10)
-    print("Page content after expiration:", cache.get(url) is None)
-
-    # Log stats from MongoDB
-    print("\nLog statistics:")
-    log_stats()
+    # Wait and check the cache expiration
+    time.sleep(11)
+    print("Fetching page content after cache expiration...")
+    content_after_expiration = get_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
+    print(content_after_expiration[:100])  # Print the first 100 characters again
