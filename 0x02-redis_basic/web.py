@@ -6,6 +6,7 @@ Script to cache web pages and log access stats.
 import redis
 import requests
 from typing import Callable
+from pymongo import MongoClient  # Move import here for clarity
 
 # Initialize Redis client
 cache = redis.Redis()
@@ -41,12 +42,6 @@ def get_page(url: str) -> str:
 
 def log_stats():
     """Logs stats from the nginx logs collection in MongoDB."""
-    try:
-        from pymongo import MongoClient
-    except ModuleNotFoundError:
-        print("Error: pymongo module not found.")
-        return
-
     client = MongoClient('mongodb://127.0.0.1:27017')
     logs_collection = client.logs.nginx
 
@@ -72,6 +67,7 @@ def log_stats():
     sorted_ips = logs_collection.aggregate(
         [{"$group": {"_id": "$ip", "count": {"$sum": 1}}},
          {"$sort": {"count": -1}}])
+    
     for i, ip in enumerate(sorted_ips):
         if i == 10:
             break
@@ -91,7 +87,7 @@ if __name__ == "__main__":
     from time import sleep
     print("Waiting 10 seconds for cache to expire...")
     sleep(10)
-    print("Page content after expiration:", cache.get(url))
+    print("Page content after expiration:", cache.get(url) is None)
 
     # Log stats from MongoDB
     print("\nLog statistics:")
