@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+"""
+web.py: A module for fetching web pages with caching and access tracking.
+"""
+
 import redis
 import requests
 from functools import wraps
-from time import time
 
 # Connect to Redis
 cache = redis.Redis()
@@ -35,10 +38,10 @@ def cache_page(expiration_time: int):
 @cache_page(expiration_time=10)  # Cache the page for 10 seconds
 def get_page(url: str) -> str:
     """Fetch the HTML content of a URL.
-    
+
     Args:
         url (str): The URL to fetch.
-        
+
     Returns:
         str: The HTML content of the URL.
     """
@@ -48,4 +51,5 @@ def get_page(url: str) -> str:
 # Example usage (this can be removed or commented out)
 if __name__ == "__main__":
     url = "http://slowwly.robertomurray.co.uk/delay/3000/url/http://www.google.com"
-    print(get_page(url))
+    print(get_page(url))  # Fetch and cache the page
+    print(cache.get(f"count:{url}"))  # Check access count
