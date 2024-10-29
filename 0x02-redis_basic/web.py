@@ -5,14 +5,10 @@ Script to cache web pages and log access stats.
 
 import redis
 import requests
-from pymongo import MongoClient
 from typing import Callable
-from time import sleep
 
-# Initialize Redis and MongoDB clients
+# Initialize Redis client
 cache = redis.Redis()
-client = MongoClient('mongodb://127.0.0.1:27017')
-logs_collection = client.logs.nginx
 
 
 def get_page(url: str) -> str:
@@ -27,6 +23,7 @@ def get_page(url: str) -> str:
     """
     cached_page = cache.get(url)
     if cached_page:
+        cache.incr("page_access_count")
         return cached_page.decode('utf-8')
     
     response = requests.get(url)
@@ -43,6 +40,15 @@ def get_page(url: str) -> str:
 
 def log_stats():
     """Logs stats from the nginx logs collection in MongoDB."""
+    try:
+        from pymongo import MongoClient
+    except ModuleNotFoundError:
+        print("Error: pymongo module not found.")
+        return
+
+    client = MongoClient('mongodb://127.0.0.1:27017')
+    logs_collection = client.logs.nginx
+
     total = logs_collection.count_documents({})
     get = logs_collection.count_documents({"method": "GET"})
     post = logs_collection.count_documents({"method": "POST"})
@@ -81,6 +87,7 @@ if __name__ == "__main__":
     print("Page content cached:", bool(cache.get(url)))
     
     # Wait 10 seconds to test expiration
+    from time import sleep
     print("Waiting 10 seconds for cache to expire...")
     sleep(10)
     print("Page content after expiration:", cache.get(url))
@@ -88,4 +95,3 @@ if __name__ == "__main__":
     # Log stats from MongoDB
     print("\nLog statistics:")
     log_stats()
-
