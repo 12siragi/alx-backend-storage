@@ -1,64 +1,51 @@
 #!/usr/bin/env python3
-"""
-A module to retrieve web pages and cache the results in Redis.
-"""
-
-import requests
 import redis
-import time
+import requests
+from functools import wraps
+from time import time
 
-# Initialize the Redis client
+# Connect to Redis
 cache = redis.Redis()
 
-def cache_page(url: str):
-    """
-    Decorator to cache the page content and access count in Redis.
-    """
+def cache_page(expiration_time: int):
+    """Decorator to cache the output of the get_page function."""
     def decorator(func):
-        def wrapper(*args, **kwargs):
-            # Cache key for the URL and access count
-            cache_key = f"count:{url}"
-            cached_content = cache.get(url)
+        @wraps(func)
+        def wrapper(url: str):
+            # Check if the URL is cached
+            cached_data = cache.get(url)
+            if cached_data:
+                # If cached, return the cached data
+                return cached_data.decode('utf-8')
 
-            # If the page is cached, increment the access count and return cached content
-            if cached_content:
-                cache.incr(cache_key)
-                return cached_content.decode('utf-8')
-
-            # Call the actual function if not cached
-            page_content = func(*args, **kwargs)
-            # Cache the content with a 10-second expiration
-            cache.setex(url, 10, page_content)
+            # If not cached, call the original function to fetch the page
+            html_content = func(url)
+            
+            # Cache the result with an expiration time
+            cache.set(url, html_content, ex=expiration_time)
 
             # Increment the access count
-            cache.incr(cache_key)
+            count_key = f"count:{url}"
+            cache.incr(count_key)
 
-            return page_content
+            return html_content
         return wrapper
     return decorator
 
-@cache_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
+@cache_page(expiration_time=10)  # Cache the page for 10 seconds
 def get_page(url: str) -> str:
-    """
-    Fetch the HTML content of a given URL.
-
-    Parameters:
-    - url (str): The URL to fetch.
-
+    """Fetch the HTML content of a URL.
+    
+    Args:
+        url (str): The URL to fetch.
+        
     Returns:
-    - str: The HTML content of the page.
+        str: The HTML content of the URL.
     """
     response = requests.get(url)
     return response.text
 
+# Example usage (this can be removed or commented out)
 if __name__ == "__main__":
-    # Testing the function
-    print("Fetching page content...")
-    content = get_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
-    print(content[:100])  # Print the first 100 characters of the content
-
-    # Wait and check the cache expiration
-    time.sleep(11)
-    print("Fetching page content after cache expiration...")
-    content_after_expiration = get_page('http://slowwly.robertomurray.co.uk/delay/5/url/http://google.com')
-    print(content_after_expiration[:100])  # Print the first 100 characters again
+    url = "http://slowwly.robertomurray.co.uk/delay/3000/url/http://www.google.com"
+    print(get_page(url))
